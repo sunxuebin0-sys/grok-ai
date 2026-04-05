@@ -1,6 +1,5 @@
 import fs from 'fs'
-import https from 'https'
-import crypto from 'crypto'
+import jwt from 'jsonwebtoken'
 
 const DATA_FILE = '/tmp/users.json'
 const JWT_SECRET = 'grok_ai_jwt_secret_2024_xsb'
@@ -10,12 +9,7 @@ const GROK_CHAT_MODEL = 'grok-3'
 
 function verifyToken(token) {
   try {
-    const [header, body, sig] = token.split('.')
-    const expected = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64url')
-    if (sig !== expected) return null
-    const payload = JSON.parse(Buffer.from(body, 'base64url').toString())
-    if (payload.exp < Date.now()) return null
-    return payload
+    return jwt.verify(token, JWT_SECRET)
   } catch { return null }
 }
 
@@ -46,59 +40,38 @@ export default async function handler(req, res) {
   const { messages } = req.body
   if (!messages || !Array.isArray(messages)) return res.status(400).json({ error: '消息格式错误' })
 
-  const body = JSON.stringify({
-    model: GROK_CHAT_MODEL,
-    messages,
-    stream: true
-  })
-
-  const url = new URL(`${GROK_API_BASE}/chat/completions`)
-
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Connection', 'keep-alive')
 
-  return new Promise((resolve) => {
-    const options = {
-      hostname: url.hostname,
-      path: url.pathname,
+  try {
+    const apiRes = await fetch(`${GROK_API_BASE}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROK_API_KEY}`,
-        'Content-Length': Buffer.byteLength(body)
-      }
+        'Authorization': `Bearer ${GROK_API_KEY}`
+      },
+      body: JSON.stringify({ model: GROK_CHAT_MODEL, messages, stream: true })
+    })
+
+    if (!apiRes.ok) {
+      const errText = await apiRes.text()
+      res.write(`data: ${JSON.stringify({ error: '上游API错误: ' + errText })}\n\n`)
+      res.end()
+      return
     }
 
-    const apiReq = https.request(options, (apiRes) => {
-      if (apiRes.statusCode !== 200) {
-        let errData = ''
-        apiRes.on('data', chunk => { errData += chunk })
-        apiRes.on('end', () => {
-          res.write(`data: ${JSON.stringify({ error: '上游API错误: ' + errData })}\n\n`)
-          res.end()
-          resolve()
-        })
-        return
-      }
-
-      apiRes.on('data', chunk => {
-        res.write(chunk)
-      })
-      apiRes.on('end', () => {
-        incrementChatCount(user.username)
-        res.end()
-        resolve()
-      })
-    })
-
-    apiReq.on('error', (err) => {
-      res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`)
-      res.end()
-      resolve()
-    })
-
-    apiReq.write(body)
-    apiReq.end()
-  })
+    const reader = apiRes.body.getReader()
+    const decoder = new TextDecoder()
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      res.write(decoder.decode(value, { stream: true }))
+    }
+    incrementChatCount(user.username)
+    res.end()
+  } catch (err) {
+    res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`)
+    res.end()
+  }
 }
