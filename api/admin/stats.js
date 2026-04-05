@@ -7,7 +7,7 @@ const JWT_SECRET = 'grok_ai_jwt_secret_2024_xsb'
 function verifyToken(token) {
   try {
     const [header, body, sig] = token.split('.');
-    const expected = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64url`);
+    const expected = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64url');
     if (sig !== expected) return null;
     const payload = JSON.parse(Buffer.from(body, 'base64url').toString());
     if (payload.exp < Date.now()) return null;
@@ -24,7 +24,8 @@ export default function handler(req, res) {
     const users = fs.existsSync(DATA_FILE) ? JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8')) : [];
     const totalChats = users.reduce((s, u) => s + (u.chatCount || 0), 0);
     const totalImages = users.reduce((s, u) => s + (u.imageCount || 0), 0);
-    return res.status(200).json({ totalUsers: users.length, totalChats, totalImages });
+    const bannedUsers = users.filter(u => u.banned).length;
+    return res.status(200).json({ totalUsers: users.length, totalChats, totalImages, bannedUsers });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
