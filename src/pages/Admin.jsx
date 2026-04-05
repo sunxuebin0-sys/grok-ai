@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 export default function Admin() {
   const [stats, setStats] = useState(null)
@@ -9,7 +9,7 @@ export default function Admin() {
 
   const token = localStorage.getItem('token')
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
@@ -27,9 +27,9 @@ export default function Admin() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [token])
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => { fetchData() }, [fetchData])
 
   const doAction = async (username, action) => {
     const labels = { ban: '封禁', unban: '解封', delete: '删除' }
