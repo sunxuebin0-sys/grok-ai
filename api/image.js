@@ -37,10 +37,11 @@ export default async function handler(req, res) {
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'grok-2-image',
+        model: 'aurora',
         prompt: prompt.trim(),
         n: count,
-        size
+        size,
+        response_format: 'url'
       })
     });
 
