@@ -1,17 +1,12 @@
 import fs from 'fs'
-import crypto from 'crypto'
+import jwt from 'jsonwebtoken'
 
 const DATA_FILE = '/tmp/users.json'
 const JWT_SECRET = 'grok_ai_jwt_secret_2024_xsb'
 
 function verifyToken(token) {
   try {
-    const [header, body, sig] = token.split('.')
-    const expected = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64url')
-    if (sig !== expected) return null
-    const payload = JSON.parse(Buffer.from(body, 'base64url').toString())
-    if (payload.exp < Date.now()) return null
-    return payload
+    return jwt.verify(token, JWT_SECRET)
   } catch { return null }
 }
 
